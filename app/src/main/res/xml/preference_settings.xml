@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:key="preference_port_et"
+        android:defaultValue= "8080"
+        android:title= "Port Number"
+        android:summary="Click to enter port number"
+        android:inputType="number"
+        />
+
+    <EditTextPreference
+        android:key="preference_interval_et"
+        android:defaultValue= "1000"
+        android:title= "Interval Period"
+        android:summary="Click to enter interval period"
+        android:inputType="number"
+        />
+
+    <ListPreference
+        android:key="preference_accuracy_lp"
+        android:title="Location Accuracy"
+        android:summary="Click to choose location accuracy"
+        android:entries="@array/location_accuracy"
+        android:entryValues="@array/location_accuracy_values"
+        android:defaultValue="0"
+        />
+</PreferenceScreen>

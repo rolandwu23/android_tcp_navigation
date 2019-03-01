@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">CtrlWorks</string>
+    <string name="value_format">%1$.2f\u00B0</string>
+    <string name="double_format">%1d</string>
+    <string name="title_activity_settings">Settings</string>
+
+
+    <!--//  demi text-->
+
+    <string name="yaw_demi">Yaw</string>
+    <string name="pitch_demi">Pitch</string>
+    <string name="roll_demi">Roll</string>
+    <string name="latitude_demi">Latitude</string>
+    <string name="longitude_demi">Longitude</string>
+    <string name="altitude_demi">Altitude</string>
+    <string name="server_status_demi">Server Status</string>
+    <string name="location_accuracy_demi">Location Accuracy</string>
+    <string name="ip_address_demi">IP Address</string>
+    <string name="port_demi">Port</string>
+    <string name="waiting_demi">Waiting…</string>
+    <string name="degree_demi">90\u00B0</string>
+    <string name="server_info_demi">Server Information</string>
+    <string name="data_info_demi">Data Information</string>
+    <string name="status_demi">Status</string>
+
+
+</resources>
