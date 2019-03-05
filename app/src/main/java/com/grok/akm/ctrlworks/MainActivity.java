@@ -2,8 +2,10 @@ package com.grok.akm.ctrlworks;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -18,6 +20,9 @@ import android.location.GpsStatus;
 import android.location.Location;
 
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -47,6 +52,8 @@ import com.google.android.gms.tasks.Task;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.lang.reflect.Method;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, OnTCPMessageRecievedListener {
 
@@ -94,6 +101,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private LocationManager mLocationManager;
     private GnssStatus.Callback callback;
     private GpsStatus.Listener listener;
+
+    private HotSpotReceiver HostSpotreceiver;
+    private WifiReceiver wifiReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -300,6 +310,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
         starService(interval, accuracy);
+
+        configureHotSpotReceiver();
+        configureWifiReceiver();
 
     }
 
@@ -655,6 +668,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         stopLocationUpdates();
         TCPCommunicator.closeStreams();
         stopService(SensorService);
+        unregisterReceiver(HostSpotreceiver);
+        unregisterReceiver(wifiReceiver);
     }
 
     @Override
@@ -713,7 +728,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onConnect(boolean connect) {
             if(connect){
-                mServerStatus_tv.setText("ON");
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mServerStatus_tv.setText("ON");
+                    }
+                });
+
             }
     }
 
@@ -738,4 +759,66 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return super.onOptionsItemSelected(item);
     }
 
+    public class HotSpotReceiver extends BroadcastReceiver{
+
+        public HotSpotReceiver(){
+
+        }
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if(isSharingWiFi(wifi)){
+                mIPAddress_tv.setText("192.168.43.1");
+            }
+
+        }
+    }
+
+    public class WifiReceiver extends BroadcastReceiver{
+
+        public WifiReceiver(){
+
+        }
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            ConnectivityManager connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo wifi = connMgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+            boolean isConnected = wifi != null && wifi.isConnectedOrConnecting();
+            if(isConnected){
+                mIPAddress_tv.setText(writer.getIpAddress());
+            }
+
+        }
+    }
+
+    private void configureHotSpotReceiver() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.net.wifi.WIFI_AP_STATE_CHANGED");
+        HostSpotreceiver = new HotSpotReceiver();
+        registerReceiver(HostSpotreceiver, filter);
+    }
+
+    private void configureWifiReceiver(){
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.net.conn.CONNECTIVITY_CHANGE");
+        wifiReceiver = new WifiReceiver();
+        registerReceiver(wifiReceiver, filter);
+    }
+
+    public static boolean isSharingWiFi(final WifiManager manager)
+    {
+        try
+        {
+            final Method method = manager.getClass().getDeclaredMethod("isWifiApEnabled");
+            method.setAccessible(true); //in the case of visibility change in future APIs
+            return (Boolean) method.invoke(manager);
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        return false;
+    }
 }
