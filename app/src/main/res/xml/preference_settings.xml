@@ -12,7 +12,7 @@
     <EditTextPreference
         android:key="preference_interval_et"
         android:defaultValue= "1000"
-        android:title= "Interval Period"
+        android:title= "Location Update Interval Period"
         android:summary="Click to enter interval period"
         android:inputType="number"
         />
@@ -24,5 +24,21 @@
         android:entries="@array/location_accuracy"
         android:entryValues="@array/location_accuracy_values"
         android:defaultValue="0"
+        />
+
+    <EditTextPreference
+        android:key="preference_sensor_interval_et"
+        android:defaultValue= "1000"
+        android:title= "TCP Sensor Interval"
+        android:summary="Click to enter interval period"
+        android:inputType="number"
+        />
+
+    <EditTextPreference
+        android:key="preference_location_interval_et"
+        android:defaultValue= "1000"
+        android:title= "TCP Location Interval"
+        android:summary="Click to enter interval period"
+        android:inputType="number"
         />
 </PreferenceScreen>

@@ -28,6 +28,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -94,6 +95,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int accuracy;
     private Intent SensorService;
 
+    private String sensorInterval;
+    private String locationInterval;
+
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationRequest mLocationRequest;
     private LocationCallback mLocationCallback;
@@ -135,6 +139,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         port = preferences.getString("port", "8080");
         interval = preferences.getString("interval", "1000");
         accuracy = preferences.getInt("accuracy", 0);
+        sensorInterval = preferences.getString("SensorInterval","1000");
+        locationInterval = preferences.getString("LocationInterval","1000");
+
 
         switch (accuracy) {
             case 0:
@@ -304,22 +311,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         StringBuilder sb = new StringBuilder();
         sb.append(writer.getIpAddress());
 
-
         mIPAddress_tv.setText(sb.toString());
         mPort_tv.setText(port);
 
+        Log.e("Sensor Interval Main", sensorInterval);
+        Log.e("Location Interval Main", locationInterval);
 
-        starService(interval, accuracy);
+        starService(interval,accuracy,sensorInterval,locationInterval);
 
         configureHotSpotReceiver();
         configureWifiReceiver();
 
     }
 
-    private void starService(String interval, int accuracy) {
+    private void starService(String interval, int accuracy,String sensorInterval,String locationInterval) {
         SensorService = new Intent(this, SensorService.class);
         SensorService.putExtra("interval", Integer.parseInt(interval));
         SensorService.putExtra("accuracy", accuracy);
+        SensorService.putExtra("SensorInterval", Integer.parseInt(sensorInterval));
+        SensorService.putExtra("LocationInterval", Integer.parseInt(locationInterval));
         startService(SensorService);
     }
 
@@ -544,52 +554,65 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 break;
             }
             case REQUEST_SETTINGS_ACTIVITY: {
-                String pot = data.getStringExtra("port");
+                if(data != null) {
+                    String pot = data.getStringExtra("port");
 
-                if (pot != null) {
+                    if (pot != null) {
 
-                    port = pot;
-                    mIPAddress_tv.setText(writer.getIpAddress());
-                    mPort_tv.setText(port);
+                        port = pot;
+                        mIPAddress_tv.setText(writer.getIpAddress());
+                        mPort_tv.setText(port);
 
-                    TCPCommunicator.closeStreams();
-                    writer.init(Integer.parseInt(port));
-                }
-
-                String inteval = data.getStringExtra("interval");
-                if (inteval != null) {
-
-                    interval = inteval;
-                    mLocationRequest.setInterval(Integer.parseInt(interval));
-                    mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
-                }
-
-                int accu = data.getIntExtra("accuracy", -1);
-                if (accu != -1) {
-                    accuracy = accu;
-                    switch (accuracy) {
-                        case 0:
-                            mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-                            mLocationAccuracy_tv.setText("High");
-                            break;
-                        case 1:
-                            mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
-                            mLocationAccuracy_tv.setText("Balanced Power");
-                            break;
-                        case 2:
-                            mLocationRequest.setPriority(LocationRequest.PRIORITY_LOW_POWER);
-                            mLocationAccuracy_tv.setText("Low Power");
-                            break;
-                        case 3:
-                            mLocationRequest.setPriority(LocationRequest.PRIORITY_NO_POWER);
-                            mLocationAccuracy_tv.setText("No Power");
-                            break;
+                        TCPCommunicator.closeStreams();
+                        writer.init(Integer.parseInt(port));
                     }
+
+                    String inteval = data.getStringExtra("interval");
+                    if (inteval != null) {
+
+                        interval = inteval;
+                        mLocationRequest.setInterval(Integer.parseInt(interval));
+                        mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
+                    }
+
+                    String senseInterval = data.getStringExtra("SensorInterval");
+                    if (senseInterval != null) {
+
+                        sensorInterval = senseInterval;
+                    }
+
+                    String locateInterval = data.getStringExtra("LocationInterval");
+                    if (locateInterval != null) {
+
+                        locationInterval = locateInterval;
+                    }
+
+                    int accu = data.getIntExtra("accuracy", -1);
+                    if (accu != -1) {
+                        accuracy = accu;
+                        switch (accuracy) {
+                            case 0:
+                                mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+                                mLocationAccuracy_tv.setText("High");
+                                break;
+                            case 1:
+                                mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+                                mLocationAccuracy_tv.setText("Balanced Power");
+                                break;
+                            case 2:
+                                mLocationRequest.setPriority(LocationRequest.PRIORITY_LOW_POWER);
+                                mLocationAccuracy_tv.setText("Low Power");
+                                break;
+                            case 3:
+                                mLocationRequest.setPriority(LocationRequest.PRIORITY_NO_POWER);
+                                mLocationAccuracy_tv.setText("No Power");
+                                break;
+                        }
+                    }
+
+                    stopService(SensorService);
+                    starService(interval, accuracy, sensorInterval, locationInterval);
                 }
-
-                stopService(SensorService);
-                starService(interval, accuracy);
-
 
                 break;
             }
@@ -704,6 +727,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float azimuth = orientationValues[0];
         float pitch = orientationValues[1];
         float roll = orientationValues[2];
+
         mDirection_tv.setText(getResources().getString(
                 R.string.value_format, azimuth));
         mPitch_tv.setText(getResources().getString(

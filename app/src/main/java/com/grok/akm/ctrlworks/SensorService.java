@@ -46,11 +46,17 @@ public class SensorService extends Service implements SensorEventListener {
 
     private float[] mAccelerometerData = new float[3];
     private float[] mMagnetometerData = new float[3];
-    private JSONObject json;
+    private JSONObject sensorJson;
+    private JSONObject locationJson;
 
-    private int interval;
+    private int locationUpdateInterval;
     private int accuracy;
 
+    private int locationInterval;
+    private int sensorInterval;
+
+    private Thread locationThread;
+    private Thread sensorThread;
 
 
     @Override
@@ -89,24 +95,12 @@ public class SensorService extends Service implements SensorEventListener {
 
         if (TCPCommunicator.connect) {
             try {
-                json.put("Yaw", azimuth);
-                json.put("Pitch", pitch);
-                json.put("Roll", roll);
+                sensorJson.put("Yaw", azimuth);
+                sensorJson.put("Pitch", pitch);
+                sensorJson.put("Roll", roll);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-
-            final JSONObject jsonReadyForSend = json;
-            Thread thread = new Thread(new Runnable() {
-
-                @Override
-                public void run() {
-                    // TODO Auto-generated method stub
-                    TCPCommunicator.writeToSocket(jsonReadyForSend);
-                }
-            });
-            thread.start();
-
 
         }
 
@@ -128,13 +122,15 @@ public class SensorService extends Service implements SensorEventListener {
         super.onDestroy();
         mSensorManager.unregisterListener(this);
         stopLocationUpdates();
+
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        json = new JSONObject();
+        sensorJson = new JSONObject();
+        locationJson = new JSONObject();
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -147,8 +143,8 @@ public class SensorService extends Service implements SensorEventListener {
 
     protected void createLocationRequest() {
         mLocationRequest = LocationRequest.create();
-        mLocationRequest.setInterval(interval);
-        mLocationRequest.setFastestInterval(interval + 4000);
+        mLocationRequest.setInterval(locationUpdateInterval);
+        mLocationRequest.setFastestInterval(locationUpdateInterval + 4000);
 
         switch (accuracy){
             case 0:
@@ -181,9 +177,10 @@ public class SensorService extends Service implements SensorEventListener {
                 }
                 for (Location location : locationResult.getLocations()) {
                     try {
-                        json.put("Latitude", location.getLatitude());
-                        json.put("Longitude", location.getLongitude());
-                        json.put("Altitude", location.getAltitude());
+                        locationJson.put("Latitude", location.getLatitude());
+                        locationJson.put("Longitude", location.getLongitude());
+                        locationJson.put("Altitude", location.getAltitude());
+
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -204,9 +201,49 @@ public class SensorService extends Service implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
-        interval = intent.getIntExtra("interval", 1000);
+        locationUpdateInterval = intent.getIntExtra("interval", 1000);
         accuracy = intent.getIntExtra("accuracy", 0);
+        sensorInterval = intent.getIntExtra("SensorInterval",1000);
+        locationInterval = intent.getIntExtra("LocationInterval",1000);
 
+        Log.e("Sensor Interval", ""+sensorInterval);
+        Log.e("Location Interval", ""+locationInterval);
+
+        final JSONObject jsonReadyForSend = sensorJson;
+        sensorThread = new Thread(new Runnable() {
+
+            @Override
+            public void run() {
+                // TODO Auto-generated method stub
+                while(true) {
+                    try {
+                        TCPCommunicator.writeToSocket(jsonReadyForSend);
+                        Thread.sleep(sensorInterval);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+        sensorThread.start();
+
+        final JSONObject json = locationJson;
+        locationThread = new Thread(new Runnable() {
+
+            @Override
+            public void run() {
+                // TODO Auto-generated method stub
+                while(true) {
+                    try {
+                        TCPCommunicator.writeToSocket(json);
+                        Thread.sleep(locationInterval);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+        locationThread.start();
 
         mSensorManager.registerListener(this,mAccelerometer,SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManager.registerListener(this,mMagnetometer,SensorManager.SENSOR_DELAY_NORMAL);
