@@ -9,13 +9,13 @@
         android:inputType="number"
         />
 
-    <EditTextPreference
-        android:key="preference_interval_et"
-        android:defaultValue= "1000"
-        android:title= "Location Update Interval Period"
-        android:summary="Click to enter interval period"
-        android:inputType="number"
-        />
+    <!--<EditTextPreference-->
+        <!--android:key="preference_interval_et"-->
+        <!--android:defaultValue= "1000"-->
+        <!--android:title= "Location Update Interval Period"-->
+        <!--android:summary="Click to enter interval period"-->
+        <!--android:inputType="number"-->
+        <!--/>-->
 
     <ListPreference
         android:key="preference_accuracy_lp"
@@ -37,7 +37,7 @@
     <EditTextPreference
         android:key="preference_location_interval_et"
         android:defaultValue= "1000"
-        android:title= "TCP Location Interval"
+        android:title= "TCP Location and Update Interval"
         android:summary="Click to enter interval period"
         android:inputType="number"
         />

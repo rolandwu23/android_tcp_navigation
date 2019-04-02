@@ -9,6 +9,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -31,7 +32,6 @@ public class TCPCommunicator {
     private static BufferedWriter out;
     private static OutputStream outputStream;
     private static Handler handler = new Handler();
-    public static boolean connect;
     private TCPCommunicator()
     {
         allListeners = new ArrayList<OnTCPMessageRecievedListener>();
@@ -52,7 +52,7 @@ public class TCPCommunicator {
         return TCPWriterErrors.OK;
 
     }
-    public static  TCPWriterErrors writeToSocket(JSONObject obj)
+    public static TCPWriterErrors writeToSocket(JSONObject obj)
     {
         try
         {
@@ -61,8 +61,16 @@ public class TCPCommunicator {
         }
         catch(Exception e)
         {
+            if(e instanceof SocketException){
+                closeStreams();
+                InitTCPServerTask task = new InitTCPServerTask();
+                task.execute();
+            }
+
             e.printStackTrace();
         }
+
+
         return TCPWriterErrors.OK;
 
     }
@@ -82,7 +90,7 @@ public class TCPCommunicator {
     }
 
 
-    public class InitTCPServerTask extends AsyncTask<Void, Void, Void>
+    public static class InitTCPServerTask extends AsyncTask<Void, Void, Void>
     {
 
 
@@ -96,9 +104,6 @@ public class TCPCommunicator {
 
                 while(true) {
                     s = ss.accept();
-                    connect = s.isConnected();
-                    for (OnTCPMessageRecievedListener listener : allListeners)
-                        listener.onConnect(connect);
                     in = new BufferedReader(new InputStreamReader(s.getInputStream()));
                     outputStream = s.getOutputStream();
                     out = new BufferedWriter(new OutputStreamWriter(outputStream));

@@ -2,6 +2,9 @@ package com.grok.akm.ctrlworks;
 
 import android.Manifest;
 import android.app.IntentService;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -11,10 +14,16 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.GnssStatus;
+import android.location.GpsSatellite;
+import android.location.GpsStatus;
 import android.location.Location;
+import android.location.LocationManager;
+import android.os.Build;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -22,10 +31,11 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnSuccessListener;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import static com.grok.akm.ctrlworks.MainActivity.CHANNEL_ID;
 
 public class SensorService extends Service implements SensorEventListener {
     /**
@@ -34,9 +44,14 @@ public class SensorService extends Service implements SensorEventListener {
      * @param name Used to name the worker thread, important only for debugging.
      */
 
+    private static final int NOTI_ID = 9999;
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationRequest mLocationRequest;
     private LocationCallback mLocationCallback;
+
+    private LocationManager mLocationManager;
+    private GnssStatus.Callback callback;
+    private GpsStatus.Listener listener;
 
 
     private SensorManager mSensorManager;
@@ -49,7 +64,7 @@ public class SensorService extends Service implements SensorEventListener {
     private JSONObject sensorJson;
     private JSONObject locationJson;
 
-    private int locationUpdateInterval;
+//    private int locationUpdateInterval;
     private int accuracy;
 
     private int locationInterval;
@@ -57,6 +72,8 @@ public class SensorService extends Service implements SensorEventListener {
 
     private Thread locationThread;
     private Thread sensorThread;
+
+    boolean exit;
 
 
     @Override
@@ -93,7 +110,7 @@ public class SensorService extends Service implements SensorEventListener {
         float roll = orientationValues[2];
 
 
-        if (TCPCommunicator.connect) {
+//        if (TCPCommunicator.connect) {
             try {
                 sensorJson.put("Yaw", azimuth);
                 sensorJson.put("Pitch", pitch);
@@ -102,7 +119,7 @@ public class SensorService extends Service implements SensorEventListener {
                 e.printStackTrace();
             }
 
-        }
+//        }
 
     }
 
@@ -122,7 +139,15 @@ public class SensorService extends Service implements SensorEventListener {
         super.onDestroy();
         mSensorManager.unregisterListener(this);
         stopLocationUpdates();
-
+        if(mLocationManager != null)  {
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                mLocationManager.unregisterGnssStatusCallback(callback);
+            }else{
+                mLocationManager.removeGpsStatusListener(listener);
+            }
+        }
+        stopThread();
+        stopForeground(true);
     }
 
     @Override
@@ -138,15 +163,20 @@ public class SensorService extends Service implements SensorEventListener {
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
+        locationStatus();
+
         createLocationRequest();
+
     }
 
     protected void createLocationRequest() {
         mLocationRequest = LocationRequest.create();
-        mLocationRequest.setInterval(locationUpdateInterval);
-        mLocationRequest.setFastestInterval(locationUpdateInterval + 4000);
+//        mLocationRequest.setInterval(locationUpdateInterval);
+//        mLocationRequest.setFastestInterval(locationUpdateInterval + 4000);
+        mLocationRequest.setInterval(locationInterval);
+        mLocationRequest.setFastestInterval(locationInterval + 4000);
 
-        switch (accuracy){
+        switch (accuracy) {
             case 0:
                 mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
                 break;
@@ -164,6 +194,104 @@ public class SensorService extends Service implements SensorEventListener {
     }
 
 
+    private void locationStatus() {
+        mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            callback = new GnssStatus.Callback() {
+                @Override
+                public void onStarted() {
+                    super.onStarted();
+                    try {
+                        locationJson.put("Status","Started");
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onStopped() {
+                    super.onStopped();
+                    try {
+                        locationJson.put("Status","Stopped");
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onFirstFix(int ttffMillis) {
+                    super.onFirstFix(ttffMillis);
+                }
+
+                @Override
+                public void onSatelliteStatusChanged(GnssStatus status) {
+                    super.onSatelliteStatusChanged(status);
+
+                    int satellite = status.getSatelliteCount();
+                    int count = 0;
+                    for (int i = 0; i < satellite; i++) {
+                        if (status.usedInFix(i)) {
+                            count++;
+                        }
+                    }
+                    try {
+                        if (count == 0) {
+                            locationJson.put("Status","No Fix");
+                        } else if (count <= 3) {
+                            locationJson.put("Status","2D");
+                        } else {
+                            locationJson.put("Status","3D");
+                        }
+                    }catch (JSONException e){
+                        e.printStackTrace();
+                    }
+                }
+            };
+
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+                return;
+            }
+            mLocationManager.registerGnssStatusCallback(callback);
+        } else {
+            listener = new GpsStatus.Listener() {
+                @Override
+                public void onGpsStatusChanged(int event) {
+                    if (event == GpsStatus.GPS_EVENT_SATELLITE_STATUS) {
+
+                        if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            return;
+                        }
+                        GpsStatus gpsStatus = mLocationManager.getGpsStatus(null);
+                        Iterable<GpsSatellite> satellite = gpsStatus.getSatellites();
+                        int count = 0;
+
+                        for (GpsSatellite sat : satellite) {
+                            if (sat.usedInFix()) {
+                                count++;
+                            }
+                        }
+                        try {
+                            if (count == 0) {
+                                locationJson.put("Status","No Fix");
+                            } else if (count <= 3) {
+                                locationJson.put("Status","2D");
+                            } else {
+                                locationJson.put("Status","3D");
+                            }
+                        }catch (JSONException e){
+                            e.printStackTrace();
+                        }
+
+                    }
+                }
+            };
+
+            mLocationManager.addGpsStatusListener(listener);
+
+        }
+    }
     private void startLocationUpdates() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
@@ -201,13 +329,14 @@ public class SensorService extends Service implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
-        locationUpdateInterval = intent.getIntExtra("interval", 1000);
+//        locationUpdateInterval = intent.getIntExtra("interval", 1000);
         accuracy = intent.getIntExtra("accuracy", 0);
         sensorInterval = intent.getIntExtra("SensorInterval",1000);
         locationInterval = intent.getIntExtra("LocationInterval",1000);
 
-        Log.e("Sensor Interval", ""+sensorInterval);
-        Log.e("Location Interval", ""+locationInterval);
+        startForeground();
+
+        exit = false;
 
         final JSONObject jsonReadyForSend = sensorJson;
         sensorThread = new Thread(new Runnable() {
@@ -215,8 +344,9 @@ public class SensorService extends Service implements SensorEventListener {
             @Override
             public void run() {
                 // TODO Auto-generated method stub
-                while(true) {
+                while(!exit) {
                     try {
+
                         TCPCommunicator.writeToSocket(jsonReadyForSend);
                         Thread.sleep(sensorInterval);
                     } catch (InterruptedException e) {
@@ -233,7 +363,7 @@ public class SensorService extends Service implements SensorEventListener {
             @Override
             public void run() {
                 // TODO Auto-generated method stub
-                while(true) {
+                while(!exit) {
                     try {
                         TCPCommunicator.writeToSocket(json);
                         Thread.sleep(locationInterval);
@@ -248,5 +378,40 @@ public class SensorService extends Service implements SensorEventListener {
         mSensorManager.registerListener(this,mAccelerometer,SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManager.registerListener(this,mMagnetometer,SensorManager.SENSOR_DELAY_NORMAL);
         return Service.START_STICKY_COMPATIBILITY;
+    }
+
+    private void stopThread(){
+        exit = true;
+    }
+
+    private void startForeground() {
+        Intent notificationIntent = new Intent();
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0,
+                notificationIntent, 0);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForeground(NOTI_ID, new NotificationCompat.Builder(this, CHANNEL_ID) // don't forget create a notification channel first
+                    .setOngoing(true)
+                    .setSmallIcon(R.mipmap.ic_launcher_foreground)
+                    .setContentTitle(getString(R.string.app_name))
+                    .setContentText("Service is running background")
+                    .setContentIntent(pendingIntent)
+                    .build());
+        }else{
+            Notification notification = new NotificationCompat.Builder(this)
+                    .setOngoing(true)
+                    .setSmallIcon(R.mipmap.ic_launcher_foreground)
+                    .setContentTitle(getString(R.string.app_name))
+                    .setContentText("Service is running background")
+                    .setContentIntent(pendingIntent)
+                    .setChannelId(CHANNEL_ID)
+                    .build();
+
+            startForeground(NOTI_ID, notification);
+            NotificationManager mNotificationManager =
+                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            mNotificationManager.notify(NOTI_ID,notification);
+        }
     }
 }

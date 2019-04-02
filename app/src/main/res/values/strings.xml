@@ -5,7 +5,8 @@
     <string name="title_activity_settings">Settings</string>
 
 
-    <!--//  demi text-->
+    <string name="channel_name">CtrlWorks</string>
+    <string name="channel_description">CtrlWorks Service</string>
 
     <string name="yaw_demi">Yaw</string>
     <string name="pitch_demi">Pitch</string>

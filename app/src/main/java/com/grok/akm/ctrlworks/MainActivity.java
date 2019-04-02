@@ -2,6 +2,10 @@ package com.grok.akm.ctrlworks;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -24,8 +28,10 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -62,6 +68,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private final int REQUEST_CHECK_SETTINGS = 2000;
     private final int REQUEST_SETTINGS_ACTIVITY = 3000;
     private final int DIFF_FASTEST_INTERVAL = 4000;
+    private static final String WAKE_LOCK_TAG = "CtrlWorks::Wake_Lock";
+
+    public static final String CHANNEL_ID = "CtrlWorks_Foreground_Service";
 
     public static final String SHARED_PREF_SERVICE = "com.grok.akm.ctrlworks.Service.sharedPref";
 
@@ -90,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private JSONObject json;
 
-    private String interval;
+//    private String interval;
     private String port;
     private int accuracy;
     private Intent SensorService;
@@ -108,6 +117,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private HotSpotReceiver HostSpotreceiver;
     private WifiReceiver wifiReceiver;
+
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,13 +145,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mStatus_tv = (TextView) findViewById(R.id.status_tv);
 
         SharedPreferences preferences = getApplicationContext().getSharedPreferences(SHARED_PREF_SERVICE, MODE_PRIVATE);
-        SharedPreferences.Editor editor = preferences.edit();
 
         port = preferences.getString("port", "8080");
-        interval = preferences.getString("interval", "1000");
+//        interval = preferences.getString("interval", "1000");
         accuracy = preferences.getInt("accuracy", 0);
         sensorInterval = preferences.getString("SensorInterval","1000");
         locationInterval = preferences.getString("LocationInterval","1000");
+
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,WAKE_LOCK_TAG);
+        wakeLock.acquire();
 
 
         switch (accuracy) {
@@ -157,6 +171,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 mLocationAccuracy_tv.setText("No Power");
                 break;
         }
+
+        createNotificationChannel();
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -314,24 +330,38 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mIPAddress_tv.setText(sb.toString());
         mPort_tv.setText(port);
 
-        Log.e("Sensor Interval Main", sensorInterval);
-        Log.e("Location Interval Main", locationInterval);
 
-        starService(interval,accuracy,sensorInterval,locationInterval);
+//        starService(interval,accuracy,sensorInterval,locationInterval);
+        starService(accuracy,sensorInterval,locationInterval);
 
         configureHotSpotReceiver();
         configureWifiReceiver();
 
     }
 
-    private void starService(String interval, int accuracy,String sensorInterval,String locationInterval) {
+//    private void starService(String interval, int accuracy,String sensorInterval,String locationInterval) {
+//        SensorService = new Intent(this, SensorService.class);
+//        SensorService.putExtra("interval", Integer.parseInt(interval));
+//        SensorService.putExtra("accuracy", accuracy);
+//        SensorService.putExtra("SensorInterval", Integer.parseInt(sensorInterval));
+//        SensorService.putExtra("LocationInterval", Integer.parseInt(locationInterval));
+//        startService(SensorService);
+//    }
+
+    private void starService(int accuracy,String sensorInterval,String locationInterval) {
         SensorService = new Intent(this, SensorService.class);
-        SensorService.putExtra("interval", Integer.parseInt(interval));
         SensorService.putExtra("accuracy", accuracy);
         SensorService.putExtra("SensorInterval", Integer.parseInt(sensorInterval));
         SensorService.putExtra("LocationInterval", Integer.parseInt(locationInterval));
-        startService(SensorService);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(SensorService);
+        }else{
+            startService(SensorService);
+        }
     }
+
+
 
     private void SettingsActivityPath() {
         Intent intent = new Intent(this, SettingsActivity.class);
@@ -567,13 +597,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         writer.init(Integer.parseInt(port));
                     }
 
-                    String inteval = data.getStringExtra("interval");
-                    if (inteval != null) {
-
-                        interval = inteval;
-                        mLocationRequest.setInterval(Integer.parseInt(interval));
-                        mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
-                    }
+//                    String inteval = data.getStringExtra("interval");
+//                    if (inteval != null) {
+//
+//                        interval = inteval;
+//                        mLocationRequest.setInterval(Integer.parseInt(interval));
+//                        mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
+//                    }
 
                     String senseInterval = data.getStringExtra("SensorInterval");
                     if (senseInterval != null) {
@@ -585,6 +615,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     if (locateInterval != null) {
 
                         locationInterval = locateInterval;
+                        mLocationRequest.setInterval(Integer.parseInt(locationInterval));
+                        mLocationRequest.setFastestInterval(Integer.parseInt(locationInterval) + DIFF_FASTEST_INTERVAL);
                     }
 
                     int accu = data.getIntExtra("accuracy", -1);
@@ -611,7 +643,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
 
                     stopService(SensorService);
-                    starService(interval, accuracy, sensorInterval, locationInterval);
+//                    starService(interval, accuracy, sensorInterval, locationInterval);
+                    starService(accuracy,sensorInterval,locationInterval);
                 }
 
                 break;
@@ -621,9 +654,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     protected void createLocationRequest() {
         mLocationRequest = LocationRequest.create();
-        mLocationRequest.setInterval(Integer.parseInt(interval));
-        mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
-
+//        mLocationRequest.setInterval(Integer.parseInt(interval));
+        mLocationRequest.setInterval(Integer.parseInt(locationInterval));
+//        mLocationRequest.setFastestInterval(Integer.parseInt(interval) + DIFF_FASTEST_INTERVAL);
+        mLocationRequest.setFastestInterval(Integer.parseInt(locationInterval) + DIFF_FASTEST_INTERVAL);
         switch (accuracy) {
             case 0:
                 mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -693,6 +727,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         stopService(SensorService);
         unregisterReceiver(HostSpotreceiver);
         unregisterReceiver(wifiReceiver);
+        wakeLock.release();
     }
 
     @Override
@@ -794,6 +829,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             final WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if(isSharingWiFi(wifi)){
                 mIPAddress_tv.setText("192.168.43.1");
+//                SharedPreferences preferences = getApplicationContext().getSharedPreferences(SHARED_PREF_SERVICE, MODE_PRIVATE);
+//                String port = preferences.getString("port", "8080");
+//                int accuracy = preferences.getInt("accuracy", 0);
+//                String sensorInterval = preferences.getString("SensorInterval","1000");
+//                String locationInterval = preferences.getString("LocationInterval","1000");
+//                TCPCommunicator.closeStreams();
+//                writer.init(Integer.parseInt(port));
+//                stopService(SensorService);
+//                starService(accuracy,sensorInterval,locationInterval);
             }
 
         }
@@ -812,6 +856,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             boolean isConnected = wifi != null && wifi.isConnectedOrConnecting();
             if(isConnected){
                 mIPAddress_tv.setText(writer.getIpAddress());
+//                SharedPreferences preferences = getApplicationContext().getSharedPreferences(SHARED_PREF_SERVICE, MODE_PRIVATE);
+//                String port = preferences.getString("port", "8080");
+//                int accuracy = preferences.getInt("accuracy", 0);
+//                String sensorInterval = preferences.getString("SensorInterval","1000");
+//                String locationInterval = preferences.getString("LocationInterval","1000");
+//                TCPCommunicator.closeStreams();
+//                writer.init(Integer.parseInt(port));
+//                stopService(SensorService);
+//                starService(accuracy,sensorInterval,locationInterval);
             }
 
         }
@@ -844,5 +897,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
 
         return false;
+    }
+
+    private void createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = getString(R.string.channel_name);
+            String description = getString(R.string.channel_description);
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            // Register the channel with the system; you can't change the importance
+            // or other notification behaviors after this
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 }

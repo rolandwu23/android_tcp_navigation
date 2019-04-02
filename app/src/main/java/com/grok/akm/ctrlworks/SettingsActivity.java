@@ -19,7 +19,7 @@ import android.widget.Toast;
 public class SettingsActivity extends AppCompatActivity {
 
     static String pot;
-    static String inveral;
+//    static String inveral;
     static int accu;
     static String senseInterval;
     static String locateInterval;
@@ -51,26 +51,28 @@ public class SettingsActivity extends AppCompatActivity {
                     String port = newValue.toString();
                     preference.setSummary(port);
                     pot = port;
-                    editor.putString("port",port);
-
-                } else if(preference.getKey().equals("preference_interval_et")) {
-                    String interval = newValue.toString();
-
-                    if (Integer.parseInt(interval) < 1000) {
-                        Toast.makeText(context, "Min is 1000 milli second", Toast.LENGTH_SHORT).show();
-                        return false;
-                    } else {
-                        inveral = interval;
-                        editor.putString("interval",interval);
-                        preference.setSummary(interval);
-
-                    }
+                    editor.putString("port", port);
                 }
+
+//                } else if(preference.getKey().equals("preference_interval_et")) {
+//                    String interval = newValue.toString();
+//
+////                    if(Integer.parseInt(interval) < 1000){
+//                    if (interval.length() == 0 ) {
+//                        Toast.makeText(context, "Must Enter Something", Toast.LENGTH_SHORT).show();
+//                        return false;
+//                    } else {
+//                        inveral = interval;
+//                        editor.putString("interval",interval);
+//                        preference.setSummary(interval);
+//
+//                    }
+//                }
                 else if(preference.getKey().equals("preference_sensor_interval_et")) {
                     String sensorInterval = newValue.toString();
 
-                    if (Integer.parseInt(sensorInterval) < 1000) {
-                        Toast.makeText(context, "Min is 1000 milli second", Toast.LENGTH_SHORT).show();
+                    if (sensorInterval.length() == 0) {
+                        Toast.makeText(context, "Must Enter Something", Toast.LENGTH_SHORT).show();
                         return false;
                     } else {
                         senseInterval = sensorInterval;
@@ -83,8 +85,8 @@ public class SettingsActivity extends AppCompatActivity {
                 else if(preference.getKey().equals("preference_location_interval_et")) {
                     String locationInterval = newValue.toString();
 
-                    if (Integer.parseInt(locationInterval) < 1000) {
-                        Toast.makeText(context, "Min is 1000 milli second", Toast.LENGTH_SHORT).show();
+                    if (locationInterval.length() == 0) {
+                        Toast.makeText(context, "Must Enter Something", Toast.LENGTH_SHORT).show();
                         return false;
                     } else {
                         locateInterval = locationInterval;
@@ -153,7 +155,7 @@ public class SettingsActivity extends AppCompatActivity {
             editor = preferences.edit();
 
             bindPreferenceSummaryToValue(findPreference("preference_port_et"));
-            bindPreferenceSummaryToValue(findPreference("preference_interval_et"));
+//            bindPreferenceSummaryToValue(findPreference("preference_interval_et"));
             bindPreferenceSummaryToValue(findPreference("preference_accuracy_lp"));
             bindPreferenceSummaryToValue(findPreference("preference_sensor_interval_et"));
             bindPreferenceSummaryToValue(findPreference("preference_location_interval_et"));
@@ -169,7 +171,7 @@ public class SettingsActivity extends AppCompatActivity {
         Intent intent = new Intent();
         intent.putExtra("accuracy", accu);
         intent.putExtra("port", pot);
-        intent.putExtra("interval", inveral);
+//        intent.putExtra("interval", inveral);
         intent.putExtra("SensorInterval",senseInterval);
         intent.putExtra("LocationInterval",locateInterval);
         setResult(RESULT_OK,intent);
