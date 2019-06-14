@@ -1,17 +1,14 @@
 package com.grok.akm.ctrlworks;
 
 import android.Manifest;
-import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
-import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.GnssStatus;
@@ -24,7 +21,6 @@ import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
-import android.util.Log;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -32,6 +28,7 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 
+import org.greenrobot.eventbus.EventBus;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -64,6 +61,9 @@ public class SensorService extends Service implements SensorEventListener {
     private JSONObject sensorJson;
     private JSONObject locationJson;
 
+    private SensorData sensorData;
+    private LocationData locationData;
+
 //    private int locationUpdateInterval;
     private int accuracy;
 
@@ -77,7 +77,7 @@ public class SensorService extends Service implements SensorEventListener {
 
 
     @Override
-    public void onSensorChanged(SensorEvent event) {
+    public void onSensorChanged(android.hardware.SensorEvent event) {
 
         int sensorType = event.sensor.getType();
         switch (sensorType) {
@@ -110,8 +110,10 @@ public class SensorService extends Service implements SensorEventListener {
         float roll = orientationValues[2];
 
 
-//        if (TCPCommunicator.connect) {
             try {
+                sensorData.setAzimuth(azimuth);
+                sensorData.setPitch(pitch);
+                sensorData.setYaw(roll);
                 sensorJson.put("Yaw", azimuth);
                 sensorJson.put("Pitch", pitch);
                 sensorJson.put("Roll", roll);
@@ -119,7 +121,7 @@ public class SensorService extends Service implements SensorEventListener {
                 e.printStackTrace();
             }
 
-//        }
+        EventBus.getDefault().post(new SensorEvent(sensorData));
 
     }
 
@@ -156,6 +158,9 @@ public class SensorService extends Service implements SensorEventListener {
 
         sensorJson = new JSONObject();
         locationJson = new JSONObject();
+
+        sensorData = new SensorData();
+        locationData = new LocationData();
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -204,6 +209,7 @@ public class SensorService extends Service implements SensorEventListener {
                     super.onStarted();
                     try {
                         locationJson.put("Status","Started");
+                        locationData.setStatus("Started");
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -214,6 +220,7 @@ public class SensorService extends Service implements SensorEventListener {
                     super.onStopped();
                     try {
                         locationJson.put("Status","Stopped");
+                        locationData.setStatus("Stopped");
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -237,10 +244,13 @@ public class SensorService extends Service implements SensorEventListener {
                     }
                     try {
                         if (count == 0) {
+                            locationData.setStatus("No Fix");
                             locationJson.put("Status","No Fix");
                         } else if (count <= 3) {
+                            locationData.setStatus("2D");
                             locationJson.put("Status","2D");
                         } else {
+                            locationData.setStatus("3D");
                             locationJson.put("Status","3D");
                         }
                     }catch (JSONException e){
@@ -274,10 +284,13 @@ public class SensorService extends Service implements SensorEventListener {
                         }
                         try {
                             if (count == 0) {
+                                locationData.setStatus("No Fix");
                                 locationJson.put("Status","No Fix");
                             } else if (count <= 3) {
+                                locationData.setStatus("2D");
                                 locationJson.put("Status","2D");
                             } else {
+                                locationData.setStatus("3D");
                                 locationJson.put("Status","3D");
                             }
                         }catch (JSONException e){
@@ -305,6 +318,9 @@ public class SensorService extends Service implements SensorEventListener {
                 }
                 for (Location location : locationResult.getLocations()) {
                     try {
+                        locationData.setLatitude(location.getLatitude());
+                        locationData.setLongitude(location.getLongitude());
+                        locationData.setAltitude(location.getAltitude());
                         locationJson.put("Latitude", location.getLatitude());
                         locationJson.put("Longitude", location.getLongitude());
                         locationJson.put("Altitude", location.getAltitude());
@@ -313,6 +329,8 @@ public class SensorService extends Service implements SensorEventListener {
                         e.printStackTrace();
                     }
                 }
+
+                EventBus.getDefault().post(new LocationEvent(locationData));
             };
         };
 
@@ -338,7 +356,7 @@ public class SensorService extends Service implements SensorEventListener {
 
         exit = false;
 
-        final JSONObject jsonReadyForSend = sensorJson;
+
         sensorThread = new Thread(new Runnable() {
 
             @Override
@@ -347,7 +365,7 @@ public class SensorService extends Service implements SensorEventListener {
                 while(!exit) {
                     try {
 
-                        TCPCommunicator.writeToSocket(jsonReadyForSend);
+                        TCPCommunicator.writeToSocket(sensorJson);
                         Thread.sleep(sensorInterval);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -357,7 +375,7 @@ public class SensorService extends Service implements SensorEventListener {
         });
         sensorThread.start();
 
-        final JSONObject json = locationJson;
+
         locationThread = new Thread(new Runnable() {
 
             @Override
@@ -365,7 +383,7 @@ public class SensorService extends Service implements SensorEventListener {
                 // TODO Auto-generated method stub
                 while(!exit) {
                     try {
-                        TCPCommunicator.writeToSocket(json);
+                        TCPCommunicator.writeToSocket(locationJson);
                         Thread.sleep(locationInterval);
                     } catch (InterruptedException e) {
                         e.printStackTrace();

@@ -2,10 +2,8 @@ package com.grok.akm.ctrlworks;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -15,7 +13,6 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
-import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.GnssStatus;
@@ -31,10 +28,8 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -57,6 +52,9 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -385,9 +383,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     public void onSuccess(Location location) {
                         // Got last known location. In some rare situations this can be null.
                         if (location != null) {
-                            mLatitude_tv.setText("" + location.getLatitude());
-                            mLongitude_tv.setText("" + location.getLongitude());
-                            mAltitude_tv.setText("" + location.getAltitude());
+//                            mLatitude_tv.setText("" + location.getLatitude());
+//                            mLongitude_tv.setText("" + location.getLongitude());
+//                            mAltitude_tv.setText("" + location.getAltitude());
 
                             try {
                                 json.put("Latitude", location.getLatitude());
@@ -409,9 +407,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         }
                         for (Location location : locationResult.getLocations()) {
 
-                            mLatitude_tv.setText("" + location.getLatitude());
-                            mLongitude_tv.setText("" + location.getLongitude());
-                            mAltitude_tv.setText("" + location.getAltitude());
+//                            mLatitude_tv.setText("" + location.getLatitude());
+//                            mLongitude_tv.setText("" + location.getLongitude());
+//                            mAltitude_tv.setText("" + location.getAltitude());
 
                             try {
                                 json.put("Latitude", location.getLatitude());
@@ -433,14 +431,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         @Override
                         public void onStarted() {
                             super.onStarted();
-                            mStatus_tv.setText("Started");
+//                            mStatus_tv.setText("Started");
 
                         }
 
                         @Override
                         public void onStopped() {
                             super.onStopped();
-                            mStatus_tv.setText("Stopped");
+//                            mStatus_tv.setText("Stopped");
 
                         }
 
@@ -461,11 +459,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 }
                             }
                             if (count == 0) {
-                                mStatus_tv.setText("No Fix");
+//                                mStatus_tv.setText("No Fix");
                             } else if (count <= 3) {
-                                mStatus_tv.setText("2D");
+//                                mStatus_tv.setText("2D");
                             } else {
-                                mStatus_tv.setText("3D");
+//                                mStatus_tv.setText("3D");
                             }
                         }
                     };
@@ -490,11 +488,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                     }
                                 }
                                 if (count == 0) {
-                                    mStatus_tv.setText("No Fix");
+//                                    mStatus_tv.setText("No Fix");
                                 } else if (count <= 3) {
-                                    mStatus_tv.setText("2D");
+//                                    mStatus_tv.setText("2D");
                                 } else {
-                                    mStatus_tv.setText("3D");
+//                                    mStatus_tv.setText("3D");
                                 }
 
                             }
@@ -693,6 +691,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onStart() {
         super.onStart();
 
+        EventBus.getDefault().register(this);
         mSensorManager.registerListener(this,mAccelerometer,SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManager.registerListener(this,mMagnetometer,SensorManager.SENSOR_DELAY_NORMAL);
     }
@@ -702,6 +701,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onStop() {
         super.onStop();
+        EventBus.getDefault().unregister(this);
         mSensorManager.unregisterListener(this);
 
         if(mLocationManager != null)  {
@@ -730,8 +730,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         wakeLock.release();
     }
 
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onSensorEvent(SensorEvent event){
+        SensorData sensor = event.sensor;
+        mDirection_tv.setText(getResources().getString(
+                R.string.value_format, sensor.getAzimuth()));
+        mPitch_tv.setText(getResources().getString(
+                R.string.value_format, sensor.getPitch()));
+        mRoll_tv.setText(getResources().getString(
+                R.string.value_format, sensor.getYaw()));
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onLocationEvent(LocationEvent event){
+        LocationData locationData = event.locationData;
+        mLatitude_tv.setText(""+locationData.getLatitude());
+        mLongitude_tv.setText(""+locationData.getLongitude());
+        mAltitude_tv.setText(""+locationData.getAltitude());
+        mStatus_tv.setText(locationData.getStatus());
+
+    }
     @Override
-    public void onSensorChanged(SensorEvent event) {
+    public void onSensorChanged(android.hardware.SensorEvent event) {
 
         int sensorType = event.sensor.getType();
         switch (sensorType) {
@@ -763,12 +783,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float pitch = orientationValues[1];
         float roll = orientationValues[2];
 
-        mDirection_tv.setText(getResources().getString(
-                R.string.value_format, azimuth));
-        mPitch_tv.setText(getResources().getString(
-                R.string.value_format, pitch));
-        mRoll_tv.setText(getResources().getString(
-                R.string.value_format, roll));
+//        mDirection_tv.setText(getResources().getString(
+//                R.string.value_format, azimuth));
+//        mPitch_tv.setText(getResources().getString(
+//                R.string.value_format, pitch));
+//        mRoll_tv.setText(getResources().getString(
+//                R.string.value_format, roll));
 
     }
 
